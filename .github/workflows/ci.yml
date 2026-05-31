@@ -1,6 +1,7 @@
 name: CI — NexaCloud API
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
   pull_request:
