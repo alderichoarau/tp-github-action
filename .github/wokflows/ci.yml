@@ -1,0 +1,132 @@
+name: CI — TP GitHub Actions
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── 1. Vérifier que les fichiers attendus sont présents ──────────────
+      - name: Vérification des fichiers attendus
+        run: |
+          files=(
+            "ressources/app.py"
+            "ressources/test_app.py"
+            "ressources/requirements.txt"
+            "ressources/.flake8"
+          )
+
+          all_present=true
+          for f in "${files[@]}"; do
+            if [ -f "$f" ]; then
+              echo "✅ $f"
+            else
+              echo "❌ $f — manquant"
+              all_present=false
+            fi
+          done
+
+          if [ "$all_present" = false ]; then
+            echo ""
+            echo "❌ Des fichiers de support sont manquants."
+            exit 1
+          fi
+          echo ""
+          echo "✅ Tous les fichiers de support sont présents"
+
+      # ── 2. Valider les fichiers YAML des workflows étudiants ─────────────
+      - name: Valider les fichiers YAML des workflows
+        run: |
+          echo "=== Validation YAML des workflows ==="
+          errors=false
+
+          # Cherche tous les .yml dans .github/workflows/ sauf ce fichier lui-même
+          while IFS= read -r workflow; do
+            if [ "$workflow" = ".github/workflows/ci.yml" ]; then
+              continue
+            fi
+            echo ""
+            echo "▶ $workflow"
+            if python3 -c "import yaml; yaml.safe_load(open('$workflow'))" 2>/dev/null; then
+              echo "  ✅ YAML valide"
+            else
+              echo "  ❌ YAML invalide"
+              errors=true
+            fi
+          done < <(find .github/workflows/ -name "*.yml" | sort)
+
+          if [ "$errors" = true ]; then
+            echo ""
+            echo "❌ Des workflows contiennent du YAML invalide."
+            exit 1
+          fi
+          echo ""
+          echo "✅ Tous les fichiers YAML sont valides"
+
+      # ── 3. Setup Python et dépendances ───────────────────────────────────
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Installer les dépendances
+        run: pip install -r ressources/requirements.txt
+
+      # ── 4. Lint avec flake8 ──────────────────────────────────────────────
+      - name: Lint avec flake8
+        run: flake8 ressources/ --config ressources/.flake8
+
+      # ── 5. Tests unitaires ────────────────────────────────────────────────
+      - name: Tests unitaires
+        run: pytest ressources/ -v --tb=short
+
+      # ── 6. Vérifier que les workflows étudiants contiennent les éléments clés
+      - name: Vérification pédagogique des workflows
+        run: |
+          echo "=== Vérification des workflows étudiants ==="
+          score=0
+          total=0
+
+          check() {
+            local description="$1"
+            local condition="$2"
+            total=$((total + 1))
+            if eval "$condition" 2>/dev/null; then
+              echo "  ✅ $description"
+              score=$((score + 1))
+            else
+              echo "  ⚠️  $description — non trouvé"
+            fi
+          }
+
+          # Étape 1 : hello.yml
+          check "hello.yml créé" "[ -f .github/workflows/hello.yml ]"
+          check "hello.yml utilise workflow_dispatch" "grep -q 'workflow_dispatch' .github/workflows/hello.yml"
+
+          # Étape 2 : ci.yml modifié par l'étudiant
+          check "ci.yml contient un job lint ou test" \
+            "grep -q 'flake8\|pytest' .github/workflows/ci.yml"
+          check "ci.yml utilise actions/setup-python" \
+            "grep -q 'setup-python' .github/workflows/ci.yml"
+
+          # Étape 3 : deploy.yml ou secrets.yml
+          check "Un workflow utilise un secret" \
+            "grep -r 'secrets\.' .github/workflows/ --include='*.yml' -l | grep -qv 'ci.yml'"
+
+          # Étape 5 : .pre-commit-config.yaml
+          check ".pre-commit-config.yaml créé" "[ -f .pre-commit-config.yaml ]"
+          check "pre-commit utilise flake8" \
+            "grep -q 'flake8' .pre-commit-config.yaml"
+
+          echo ""
+          echo "Score pédagogique : $score/$total critères atteints"
+          echo ""
+          echo "ℹ️  Ce score est indicatif — consultez CORRECTION.md pour les détails."

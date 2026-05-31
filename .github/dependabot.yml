@@ -1,0 +1,25 @@
+version: 2
+
+updates:
+  # ── Mettre à jour les actions GitHub utilisées dans les workflows ────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"
+
+  # ── Mettre à jour les dépendances Python du projet ───────────────────────
+  - package-ecosystem: "pip"
+    directory: "/ressources"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "python"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
