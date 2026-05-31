@@ -42,3 +42,10 @@ jobs:
 
       - name: Lancer les tests
         run: pytest ressources/ -v
+      
+      - name: Déployer sur Azure App Service (production)
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: "app-alderic"
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: ressources/
